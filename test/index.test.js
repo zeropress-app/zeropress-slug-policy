@@ -10,6 +10,7 @@ import {
   isSafeSlugSegment,
   normalizeSlugCandidate,
   normalizeStoredSlug,
+  resolveSlugCandidate,
   validateSlugSegment,
 } from '../src/index.js';
 
@@ -35,6 +36,11 @@ test('normalizeSlugCandidate and empty helpers follow normalized stored slugs', 
   assert.equal(hasNonEmptySlug('한글-slug'), true);
 });
 
+test('resolveSlugCandidate reuses the shared normalization and fallback behavior', () => {
+  assert.equal(resolveSlugCandidate('%ED%95%9C%EA%B8%80', 'Hello World'), '한글');
+  assert.equal(resolveSlugCandidate(undefined, 'Hello World'), 'hello-world');
+});
+
 test('validateSlugSegment accepts valid Unicode and Hangul segments', () => {
   const result = validateSlugSegment('안녕하세요-제로프레스');
 
@@ -50,11 +56,14 @@ test('validateSlugSegment rejects non-string and empty values', () => {
   assert.equal(validateSlugSegment('   ').issues[0]?.code, SLUG_SEGMENT_ISSUE_CODES.EMPTY);
 });
 
-test('validateSlugSegment rejects leading or trailing whitespace', () => {
+test('validateSlugSegment rejects any whitespace characters', () => {
   const result = validateSlugSegment(' hello ');
+  const internalWhitespace = validateSlugSegment('hello world');
 
   assert.equal(result.ok, false);
-  assert.equal(result.issues[0]?.code, SLUG_SEGMENT_ISSUE_CODES.LEADING_OR_TRAILING_WHITESPACE);
+  assert.equal(result.issues[0]?.code, SLUG_SEGMENT_ISSUE_CODES.WHITESPACE);
+  assert.equal(internalWhitespace.ok, false);
+  assert.equal(internalWhitespace.issues[0]?.code, SLUG_SEGMENT_ISSUE_CODES.WHITESPACE);
 });
 
 test('validateSlugSegment rejects dot segments', () => {

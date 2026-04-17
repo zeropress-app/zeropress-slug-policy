@@ -4,7 +4,7 @@ export const SLUG_SEGMENT_CONTROL_CHAR_PATTERN = /[\u0000-\u001F\u007F]/;
 export const SLUG_SEGMENT_ISSUE_CODES = Object.freeze({
   INVALID_TYPE: 'INVALID_TYPE',
   EMPTY: 'EMPTY',
-  LEADING_OR_TRAILING_WHITESPACE: 'LEADING_OR_TRAILING_WHITESPACE',
+  WHITESPACE: 'WHITESPACE',
   RESERVED_DOT_SEGMENT: 'RESERVED_DOT_SEGMENT',
   PATH_SEPARATOR: 'PATH_SEPARATOR',
   PERCENT_ENCODING_OR_CONTROL: 'PERCENT_ENCODING_OR_CONTROL',
@@ -13,7 +13,7 @@ export const SLUG_SEGMENT_ISSUE_CODES = Object.freeze({
 const SLUG_SEGMENT_ISSUE_MESSAGES = Object.freeze({
   [SLUG_SEGMENT_ISSUE_CODES.INVALID_TYPE]: 'Slug must be a non-empty string',
   [SLUG_SEGMENT_ISSUE_CODES.EMPTY]: 'Slug must be a non-empty string',
-  [SLUG_SEGMENT_ISSUE_CODES.LEADING_OR_TRAILING_WHITESPACE]: 'Slug must not contain leading or trailing whitespace',
+  [SLUG_SEGMENT_ISSUE_CODES.WHITESPACE]: 'Slug must not contain whitespace',
   [SLUG_SEGMENT_ISSUE_CODES.RESERVED_DOT_SEGMENT]: 'Slug must not be "." or ".."',
   [SLUG_SEGMENT_ISSUE_CODES.PATH_SEPARATOR]: 'Slug must be a single safe path segment',
   [SLUG_SEGMENT_ISSUE_CODES.PERCENT_ENCODING_OR_CONTROL]: 'Slug must not contain percent-encoding or control characters',
@@ -60,6 +60,15 @@ export function hasNonEmptySlug(slug) {
   return !isEmptySlugValue(slug);
 }
 
+export function resolveSlugCandidate(slug, fallbackText) {
+  const normalizedSlug = normalizeSlugCandidate(slug);
+  if (normalizedSlug.length > 0) {
+    return normalizedSlug;
+  }
+
+  return generateContentSlug(fallbackText);
+}
+
 export function validateSlugSegment(value) {
   if (typeof value !== 'string') {
     return invalidSlugValidationResult('', SLUG_SEGMENT_ISSUE_CODES.INVALID_TYPE);
@@ -69,8 +78,8 @@ export function validateSlugSegment(value) {
     return invalidSlugValidationResult(value, SLUG_SEGMENT_ISSUE_CODES.EMPTY);
   }
 
-  if (value !== value.trim()) {
-    return invalidSlugValidationResult(value, SLUG_SEGMENT_ISSUE_CODES.LEADING_OR_TRAILING_WHITESPACE);
+  if (/\s/.test(value)) {
+    return invalidSlugValidationResult(value, SLUG_SEGMENT_ISSUE_CODES.WHITESPACE);
   }
 
   if (value === '.' || value === '..') {
