@@ -32,7 +32,10 @@ npm install @zeropress/slug-policy
 ```js
 import {
   CONTENT_SLUG_MAX_LENGTH,
+  CONTENT_SLUG_PATTERN,
+  CONTENT_SLUG_PATTERN_SOURCE,
   SLUG_SEGMENT_ISSUE_CODES,
+  SlugValidationError,
   assertSafeSlugSegment,
   generateContentSlug,
   hasNonEmptySlug,
@@ -69,8 +72,18 @@ It does not:
 
 A valid ZeroPress content slug:
 
-- may contain Unicode, including Hangul
+- contains only Unicode letters (`\p{L}`), combining marks (`\p{M}`),
+  Unicode decimal digits (`\p{Nd}`), ASCII hyphens (`-`), and underscores (`_`)
+- contains at least one Unicode letter or decimal digit
+- is at most 200 Unicode code points after NFC normalization
+- may contain uppercase letters; only generated slugs are lowercased
 - must be a single safe URL path segment
+
+The exported policy pattern is:
+
+```regex
+^(?=.*[\p{L}\p{Nd}])[\p{L}\p{M}\p{Nd}_-]+$
+```
 
 Rejected values include:
 
@@ -80,8 +93,11 @@ Rejected values include:
 - `.` or `..`
 - `%` or percent-encoded slug forms
 - ASCII control characters, including NUL and DEL
+- punctuation, emoji, zero-width characters, and bidirectional control characters
+- values longer than `CONTENT_SLUG_MAX_LENGTH`
 
-This means values such as `회사소개` and `무료-ai-리뷰` are valid, while `hello world`, `../escape`, `a/b`, `%2e%2e`, and `.` are invalid.
+This means `News_2026`, `회사소개`, `中文`, `café`, and `हिन्दी` are valid. `news!`,
+`hello world`, `../escape`, `a/b`, `%2e%2e`, `---`, and emoji-only values are invalid.
 
 ---
 
@@ -93,12 +109,11 @@ Generates a content slug from free-form text.
 
 Behavior:
 
-- lowercases Latin letters
+- NFC-normalizes input and lowercases Unicode letters
 - trims outer whitespace
-- keeps Hangul
-- collapses whitespace to `-`
-- removes punctuation that is not part of the allowed generated slug shape
-- truncates to `CONTENT_SLUG_MAX_LENGTH`
+- preserves letters, combining marks, decimal digits, underscores, and hyphens
+- converts each run of other characters to `-`
+- truncates to `CONTENT_SLUG_MAX_LENGTH` by Unicode code point without splitting a surrogate pair
 
 ```js
 generateContentSlug('무료 AI 리뷰');
@@ -114,6 +129,7 @@ Behavior:
 - trims outer whitespace
 - decodes percent-encoded input when decoding succeeds
 - returns the trimmed original value when decoding fails
+- returns NFC-normalized text
 
 This is useful for:
 
@@ -138,6 +154,10 @@ normalizeSlugCandidate('  %ED%95%9C%EA%B8%80  ');
 ### `resolveSlugCandidate(slug, fallbackText)`
 
 Returns the normalized explicit slug when present, otherwise generates one from fallback text.
+`undefined`, `null`, and the empty string are treated as absent; a supplied whitespace-only
+or otherwise invalid value is explicit input and is rejected.
+An explicit slug is validated after import normalization; invalid explicit input throws
+`SlugValidationError` instead of being silently repaired.
 
 ```js
 resolveSlugCandidate(undefined, 'Hello World');
@@ -192,6 +212,18 @@ Issue codes:
 - `RESERVED_DOT_SEGMENT`
 - `PATH_SEPARATOR`
 - `PERCENT_ENCODING_OR_CONTROL`
+- `DISALLOWED_CHARACTER`
+- `TOO_LONG`
+
+`value` preserves the original input, including a non-string value in a failed result.
+`normalized` is the canonical NFC candidate. Direct validation never percent-decodes before
+applying policy, so `validateSlugSegment('%2F')` fails even though
+`normalizeStoredSlug('%2F')` returns `/` for explicit import workflows.
+
+### `CONTENT_SLUG_PATTERN_SOURCE` / `CONTENT_SLUG_PATTERN`
+
+Expose the exact allowlist as a JSON-Schema-compatible source string and a Unicode `RegExp`.
+Schema and runtime consumers can share the same pattern without duplicating it.
 
 ### `isSafeSlugSegment(value)`
 
@@ -199,7 +231,9 @@ Returns `true` when the value satisfies the shared content slug policy.
 
 ### `assertSafeSlugSegment(value)`
 
-Throws when the value is not a valid safe content slug segment.
+Returns the canonical NFC value or throws `SlugValidationError` when the input is invalid.
+The error exposes `code`, `issues`, the original `value`, and the canonical `normalized`
+candidate.
 
 ---
 
@@ -229,7 +263,7 @@ This keeps the actual slug policy centralized while allowing each layer to prese
 
 - [@zeropress/preview-data-validator](https://www.npmjs.com/package/@zeropress/preview-data-validator)
 - [@zeropress/build-core](https://www.npmjs.com/package/@zeropress/build-core)
-- [ZeroPress preview-data v0.5 spec](https://zeropress.dev/spec/preview-data-v0.5.html)
+- [ZeroPress preview-data v0.6 spec](https://zeropress.dev/spec/preview-data-v0.6.html)
 
 ---
 
