@@ -10,8 +10,8 @@ This package is the runtime source of truth for **content URL-path slugs** used 
 
 - [@zeropress/preview-data-validator](https://www.npmjs.com/package/@zeropress/preview-data-validator)
 - [@zeropress/build-core](https://www.npmjs.com/package/@zeropress/build-core)
-- `backend_api_v2`
-- `frontend_admin_v2`
+- `zeropress-studio`
+- `zeropress-studio-api`
 
 It defines what a valid content slug is across ZeroPress runtime layers, so the CMS, preview-data contract, build pipeline, and admin frontend all make the same decision for the same input.
 
@@ -266,16 +266,8 @@ This keeps the actual slug policy centralized while allowing each layer to prese
 
 ## Requirements
 
-- Node.js >= 18.18.0
+- Node.js >= 22.12.0
 - ESM only
-
----
-
-## Related
-
-- [@zeropress/preview-data-validator](https://www.npmjs.com/package/@zeropress/preview-data-validator)
-- [@zeropress/build-core](https://www.npmjs.com/package/@zeropress/build-core)
-- [ZeroPress preview-data v0.6 spec](https://zeropress.dev/spec/preview-data-v0.6.html)
 
 ---
 
