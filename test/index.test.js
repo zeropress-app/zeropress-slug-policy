@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   CONTENT_SLUG_MAX_LENGTH,
+  CONTENT_SLUG_COMPONENT_PATTERN_SOURCE,
   CONTENT_SLUG_PATTERN,
   CONTENT_SLUG_PATTERN_SOURCE,
   SLUG_SEGMENT_ISSUE_CODES,
@@ -18,9 +19,14 @@ import {
 } from '../src/index.js';
 
 test('exports the Unicode content-slug pattern for runtime and schema consumers', () => {
-  assert.equal(CONTENT_SLUG_PATTERN_SOURCE, String.raw`^(?=.*[\p{L}\p{Nd}])[\p{L}\p{M}\p{Nd}_-]+$`);
+  assert.equal(CONTENT_SLUG_PATTERN_SOURCE, String.raw`^(?=.*[\p{L}\p{Nd}])(?!\.)(?!.*\.\.)(?!.*\.$)[\p{L}\p{M}\p{Nd}._-]+$`);
+  assert.equal(
+    CONTENT_SLUG_COMPONENT_PATTERN_SOURCE,
+    String.raw`(?=[\p{L}\p{M}\p{Nd}._-]*[\p{L}\p{Nd}])(?!\.)(?![\p{L}\p{M}\p{Nd}._-]*\.\.)[\p{L}\p{M}\p{Nd}_-](?:[\p{L}\p{M}\p{Nd}_-]|\.(?=[\p{L}\p{M}\p{Nd}_-]))*`,
+  );
   assert.equal(CONTENT_SLUG_PATTERN.flags, 'u');
   assert.equal(CONTENT_SLUG_PATTERN.test('News_2026'), true);
+  assert.equal(CONTENT_SLUG_PATTERN.test('theme-runtime-v0.6'), true);
   assert.equal(CONTENT_SLUG_PATTERN.test('news!'), false);
 });
 
@@ -29,6 +35,10 @@ test('generateContentSlug preserves Unicode letters and collapses invalid runs',
   assert.equal(generateContentSlug('Hello   ZeroPress'), 'hello-zeropress');
   assert.equal(generateContentSlug('中文 指南'), '中文-指南');
   assert.equal(generateContentSlug('CAFÉ हिन्दी'), 'café-हिन्दी');
+  assert.equal(generateContentSlug('Theme Runtime v0.6'), 'theme-runtime-v0.6');
+  assert.equal(generateContentSlug('news...today'), 'news-today');
+  assert.equal(generateContentSlug('.hidden'), 'hidden');
+  assert.equal(generateContentSlug('version.'), 'version');
   assert.equal(generateContentSlug('news...today / now'), 'news-today-now');
   assert.equal(generateContentSlug('😀'), '');
 });
@@ -39,6 +49,9 @@ test('generateContentSlug truncates by Unicode code point without splitting surr
   assert.equal(Array.from(generated).length, CONTENT_SLUG_MAX_LENGTH);
   assert.equal(generated.endsWith('𐐨'), true);
   assert.equal(generated.includes('\uFFFD'), false);
+
+  const trailingPeriod = generateContentSlug(`${'a'.repeat(CONTENT_SLUG_MAX_LENGTH - 1)}.suffix`);
+  assert.equal(trailingPeriod, 'a'.repeat(CONTENT_SLUG_MAX_LENGTH - 1));
 });
 
 test('normalizeStoredSlug decodes percent-encoded Unicode, trims, and returns NFC', () => {
@@ -73,8 +86,8 @@ test('resolveSlugCandidate validates normalized explicit values and generates on
   );
 });
 
-test('validateSlugSegment accepts the shared Unicode allowlist and uppercase letters', () => {
-  for (const value of ['news', 'News_2026', '회사소개', '中文', 'café', 'हिन्दी']) {
+test('validateSlugSegment accepts the shared Unicode allowlist, isolated periods, and uppercase letters', () => {
+  for (const value of ['news', 'News_2026', 'theme-runtime-v0.6', '회사소개', '中文', 'café', 'हिन्दी']) {
     const result = validateSlugSegment(value);
 
     assert.equal(result.ok, true, value);
@@ -119,6 +132,15 @@ test('validateSlugSegment rejects dot segments', () => {
   assert.equal(validateSlugSegment('..').issues[0]?.code, SLUG_SEGMENT_ISSUE_CODES.RESERVED_DOT_SEGMENT);
 });
 
+test('validateSlugSegment rejects unsafe period placement', () => {
+  for (const value of ['.hidden', 'version.', 'news..today', 'a...b']) {
+    const result = validateSlugSegment(value);
+
+    assert.equal(result.ok, false, value);
+    assert.equal(result.issues[0]?.code, SLUG_SEGMENT_ISSUE_CODES.INVALID_DOT_PLACEMENT, value);
+  }
+});
+
 test('validateSlugSegment rejects path separators', () => {
   assert.equal(validateSlugSegment('../escape').issues[0]?.code, SLUG_SEGMENT_ISSUE_CODES.PATH_SEPARATOR);
   assert.equal(validateSlugSegment('a/b').issues[0]?.code, SLUG_SEGMENT_ISSUE_CODES.PATH_SEPARATOR);
@@ -133,7 +155,7 @@ test('validateSlugSegment rejects percent-encoding and control characters', () =
 });
 
 test('validateSlugSegment rejects characters outside the Unicode allowlist', () => {
-  for (const value of ['news!', 'a.b', '😀', '---', '___', 'news\u200Btoday', 'news\u202Etoday']) {
+  for (const value of ['news!', '😀', '---', '___', 'news\u200Btoday', 'news\u202Etoday']) {
     const result = validateSlugSegment(value);
 
     assert.equal(result.ok, false, value);

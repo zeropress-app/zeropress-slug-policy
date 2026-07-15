@@ -1,5 +1,6 @@
 export const CONTENT_SLUG_MAX_LENGTH = 200;
-export const CONTENT_SLUG_PATTERN_SOURCE = String.raw`^(?=.*[\p{L}\p{Nd}])[\p{L}\p{M}\p{Nd}_-]+$`;
+export const CONTENT_SLUG_PATTERN_SOURCE = String.raw`^(?=.*[\p{L}\p{Nd}])(?!\.)(?!.*\.\.)(?!.*\.$)[\p{L}\p{M}\p{Nd}._-]+$`;
+export const CONTENT_SLUG_COMPONENT_PATTERN_SOURCE = String.raw`(?=[\p{L}\p{M}\p{Nd}._-]*[\p{L}\p{Nd}])(?!\.)(?![\p{L}\p{M}\p{Nd}._-]*\.\.)[\p{L}\p{M}\p{Nd}_-](?:[\p{L}\p{M}\p{Nd}_-]|\.(?=[\p{L}\p{M}\p{Nd}_-]))*`;
 export const CONTENT_SLUG_PATTERN = new RegExp(CONTENT_SLUG_PATTERN_SOURCE, 'u');
 export const SLUG_SEGMENT_CONTROL_CHAR_PATTERN = /[\u0000-\u001F\u007F]/;
 
@@ -8,6 +9,7 @@ export const SLUG_SEGMENT_ISSUE_CODES = Object.freeze({
   EMPTY: 'EMPTY',
   WHITESPACE: 'WHITESPACE',
   RESERVED_DOT_SEGMENT: 'RESERVED_DOT_SEGMENT',
+  INVALID_DOT_PLACEMENT: 'INVALID_DOT_PLACEMENT',
   PATH_SEPARATOR: 'PATH_SEPARATOR',
   PERCENT_ENCODING_OR_CONTROL: 'PERCENT_ENCODING_OR_CONTROL',
   DISALLOWED_CHARACTER: 'DISALLOWED_CHARACTER',
@@ -19,10 +21,12 @@ const SLUG_SEGMENT_ISSUE_MESSAGES = Object.freeze({
   [SLUG_SEGMENT_ISSUE_CODES.EMPTY]: 'Slug must be a non-empty string',
   [SLUG_SEGMENT_ISSUE_CODES.WHITESPACE]: 'Slug must not contain whitespace',
   [SLUG_SEGMENT_ISSUE_CODES.RESERVED_DOT_SEGMENT]: 'Slug must not be "." or ".."',
+  [SLUG_SEGMENT_ISSUE_CODES.INVALID_DOT_PLACEMENT]:
+    'Slug periods must be isolated and may not appear at the beginning or end',
   [SLUG_SEGMENT_ISSUE_CODES.PATH_SEPARATOR]: 'Slug must be a single safe path segment',
   [SLUG_SEGMENT_ISSUE_CODES.PERCENT_ENCODING_OR_CONTROL]: 'Slug must not contain percent-encoding or control characters',
   [SLUG_SEGMENT_ISSUE_CODES.DISALLOWED_CHARACTER]:
-    'Slug may contain only Unicode letters, marks, decimal digits, hyphens, and underscores',
+    'Slug may contain only Unicode letters, marks, decimal digits, periods, hyphens, and underscores',
   [SLUG_SEGMENT_ISSUE_CODES.TOO_LONG]:
     `Slug must be at most ${CONTENT_SLUG_MAX_LENGTH} Unicode code points`,
 });
@@ -66,13 +70,16 @@ export function generateContentSlug(value) {
     .toLowerCase()
     .normalize('NFC')
     .trim()
-    .replace(/[^\p{L}\p{M}\p{Nd}_-]+/gu, '-')
+    .replace(/\.{2,}/g, '-')
+    .replace(/[^\p{L}\p{M}\p{Nd}._-]+/gu, '-')
     .replace(/-+/g, '-')
-    .replace(/^-+|-+$/g, '');
+    .replace(/^[.-]+|[.-]+$/g, '');
   const truncated = Array.from(generated)
     .slice(0, CONTENT_SLUG_MAX_LENGTH)
     .join('')
-    .replace(/-+$/g, '');
+    .replace(/\.{2,}/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^[.-]+|[.-]+$/g, '');
 
   return CONTENT_SLUG_PATTERN.test(truncated) ? truncated : '';
 }
@@ -134,6 +141,10 @@ export function validateSlugSegment(value) {
 
   if (Array.from(normalized).length > CONTENT_SLUG_MAX_LENGTH) {
     return invalidSlugValidationResult(value, SLUG_SEGMENT_ISSUE_CODES.TOO_LONG, normalized);
+  }
+
+  if (normalized.startsWith('.') || normalized.endsWith('.') || normalized.includes('..')) {
+    return invalidSlugValidationResult(value, SLUG_SEGMENT_ISSUE_CODES.INVALID_DOT_PLACEMENT, normalized);
   }
 
   if (!CONTENT_SLUG_PATTERN.test(normalized)) {

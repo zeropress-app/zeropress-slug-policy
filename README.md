@@ -32,6 +32,7 @@ npm install @zeropress/slug-policy
 ```js
 import {
   CONTENT_SLUG_MAX_LENGTH,
+  CONTENT_SLUG_COMPONENT_PATTERN_SOURCE,
   CONTENT_SLUG_PATTERN,
   CONTENT_SLUG_PATTERN_SOURCE,
   SLUG_SEGMENT_ISSUE_CODES,
@@ -73,8 +74,9 @@ It does not:
 A valid ZeroPress content slug:
 
 - contains only Unicode letters (`\p{L}`), combining marks (`\p{M}`),
-  Unicode decimal digits (`\p{Nd}`), ASCII hyphens (`-`), and underscores (`_`)
+  Unicode decimal digits (`\p{Nd}`), ASCII periods (`.`), hyphens (`-`), and underscores (`_`)
 - contains at least one Unicode letter or decimal digit
+- may contain isolated internal periods, but not a leading period, trailing period, or `..`
 - is at most 200 Unicode code points after NFC normalization
 - may contain uppercase letters; only generated slugs are lowercased
 - must be a single safe URL path segment
@@ -82,7 +84,7 @@ A valid ZeroPress content slug:
 The exported policy pattern is:
 
 ```regex
-^(?=.*[\p{L}\p{Nd}])[\p{L}\p{M}\p{Nd}_-]+$
+^(?=.*[\p{L}\p{Nd}])(?!\.)(?!.*\.\.)(?!.*\.$)[\p{L}\p{M}\p{Nd}._-]+$
 ```
 
 Rejected values include:
@@ -91,13 +93,15 @@ Rejected values include:
 - any whitespace character
 - `/` or `\`
 - `.` or `..`
+- leading or trailing periods, or consecutive periods
 - `%` or percent-encoded slug forms
 - ASCII control characters, including NUL and DEL
 - punctuation, emoji, zero-width characters, and bidirectional control characters
 - values longer than `CONTENT_SLUG_MAX_LENGTH`
 
-This means `News_2026`, `회사소개`, `中文`, `café`, and `हिन्दी` are valid. `news!`,
-`hello world`, `../escape`, `a/b`, `%2e%2e`, `---`, and emoji-only values are invalid.
+This means `News_2026`, `theme-runtime-v0.6`, `회사소개`, `中文`, `café`, and `हिन्दी`
+are valid. `news!`, `.hidden`, `version.`, `news..today`, `hello world`, `../escape`,
+`a/b`, `%2e%2e`, `---`, and emoji-only values are invalid.
 
 ---
 
@@ -111,13 +115,17 @@ Behavior:
 
 - NFC-normalizes input and lowercases Unicode letters
 - trims outer whitespace
-- preserves letters, combining marks, decimal digits, underscores, and hyphens
+- preserves letters, combining marks, decimal digits, isolated internal periods, underscores, and hyphens
+- converts consecutive periods to `-` and removes periods at either edge
 - converts each run of other characters to `-`
 - truncates to `CONTENT_SLUG_MAX_LENGTH` by Unicode code point without splitting a surrogate pair
 
 ```js
 generateContentSlug('무료 AI 리뷰');
 // => '무료-ai-리뷰'
+
+generateContentSlug('Theme Runtime v0.6');
+// => 'theme-runtime-v0.6'
 ```
 
 ### `normalizeStoredSlug(slug)`
@@ -210,6 +218,7 @@ Issue codes:
 - `EMPTY`
 - `WHITESPACE`
 - `RESERVED_DOT_SEGMENT`
+- `INVALID_DOT_PLACEMENT`
 - `PATH_SEPARATOR`
 - `PERCENT_ENCODING_OR_CONTROL`
 - `DISALLOWED_CHARACTER`
@@ -224,6 +233,9 @@ applying policy, so `validateSlugSegment('%2F')` fails even though
 
 Expose the exact allowlist as a JSON-Schema-compatible source string and a Unicode `RegExp`.
 Schema and runtime consumers can share the same pattern without duplicating it.
+
+`CONTENT_SLUG_COMPONENT_PATTERN_SOURCE` exposes the equivalent unanchored segment
+grammar for consumers that embed literal slug segments inside a larger path pattern.
 
 ### `isSafeSlugSegment(value)`
 
