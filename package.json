@@ -1,6 +1,6 @@
 {
   "name": "@zeropress/slug-policy",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Shared ZeroPress slug normalization and validation policy",
   "type": "module",
   "license": "MIT",
