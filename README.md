@@ -266,7 +266,7 @@ This keeps the actual slug policy centralized while allowing each layer to prese
 
 ## Requirements
 
-- Node.js >= 22.12.0
+- Node.js >= 22.22.0
 - ESM only
 
 ---
